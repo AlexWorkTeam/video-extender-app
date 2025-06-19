@@ -19,14 +19,6 @@
 
 ## Установка и запуск
 
-### Вариант 1: Готовая сборка (для обычных пользователей)
-
-1.  Перейдите в раздел [Releases](https://github.com/your_username/your_repository/releases) на GitHub.
-2.  Скачайте последнюю версию для вашей операционной системы (`VideoExtender.app.zip` для macOS или `VideoExtender_Windows.zip` для Windows).
-3.  Распакуйте архив и запустите приложение.
-
-### Вариант 2: Запуск из исходного кода (для разработчиков)
-
 **Предварительные требования:**
 
 -   [Python 3.8+](https://www.python.org/downloads/)
@@ -36,8 +28,8 @@
 
 1.  **Клонируйте репозиторий:**
     ```bash
-    git clone https://github.com/your_username/your_repository.git
-    cd your_repository
+    git clone https://github.com/AlexWorkTeam/video-extender-app.git
+    cd video-extender-app
     ```
 
 2.  **Установите FFmpeg:**
@@ -60,21 +52,6 @@
     ```bash
     python3 main_multi_audio.py
     ```
-
-## Сборка из исходного кода
-
-Если вы хотите самостоятельно скомпилировать приложение:
-
-1.  Убедитесь, что у вас установлен `PyInstaller`:
-    ```bash
-    pip install pyinstaller
-    ```
-2.  Поместите исполняемый файл `ffmpeg` (или `ffmpeg.exe` для Windows) и файлы иконок (`app.icns`, `app.ico`) в корневую папку проекта.
-3.  Запустите сборочный скрипт:
-    ```bash
-    python3 build.py
-    ```
-4.  Готовое приложение появится в папке `dist`.
 
 ## Как пользоваться
 
