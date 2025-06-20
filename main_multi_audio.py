@@ -17,7 +17,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.TkdndVersion = TkinterDnD._require(self)
 
         self.title("Video Extender - Multi Audio")
-        self.geometry("600x800")
+        self.geometry("600x850")
 
         self.video_path = ""
         self.audio_paths = []
@@ -27,6 +27,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.original_resolution = "1920x1080"
 
         self.load_locales()
+        self.available_encoders = self.get_available_encoders()
         self.setup_ui()
         self.update_ui_texts()
 
@@ -42,6 +43,22 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         system_lang = locale.getdefaultlocale()[0][:2]
         self.available_langs = list(self.locales.keys())
         self.current_lang = system_lang if system_lang in self.available_langs else "en"
+
+    def get_available_encoders(self):
+        try:
+            result = subprocess.run(['ffmpeg', '-encoders'], capture_output=True, text=True, check=True)
+            available = set()
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith('V'): # Check if it's a video encoder line
+                    parts = line.split()
+                    if len(parts) > 1:
+                        available.add(parts[1])
+            return available
+        except (FileNotFoundError, subprocess.CalledProcessError) as e:
+            messagebox.showerror("FFmpeg Error", "Could not find or run ffmpeg. Please ensure it's installed and in your system's PATH.")
+            self.after(100, self.destroy)
+            return set()
 
     def setup_ui(self):
         self.grid_columnconfigure(0, weight=1)
@@ -83,38 +100,35 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.options_frame = ctk.CTkFrame(self)
         self.options_frame.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
         self.options_frame.grid_columnconfigure(1, weight=1)
-        self.options_frame.grid_columnconfigure(3, weight=1)
 
         # Codec
         self.codec_label = ctk.CTkLabel(self.options_frame, text="Codec:")
         self.codec_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
-        self.codec_var = ctk.StringVar(value="hevc")
-        self.codec_menu = ctk.CTkOptionMenu(self.options_frame, variable=self.codec_var,
-                                             values=["hevc", "h264", "prores"])
+        self.codec_var = ctk.StringVar()
+        self.codec_menu = ctk.CTkOptionMenu(self.options_frame, variable=self.codec_var, dynamic_resizing=False)
         self.codec_menu.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
 
         # Resolution
         self.resolution_label = ctk.CTkLabel(self.options_frame, text="Resolution:")
         self.resolution_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
         self.resolution_var = ctk.StringVar(value="3840x2160")
-        self.resolution_menu = ctk.CTkOptionMenu(self.options_frame, variable=self.resolution_var,
-                                                  values=["Original", "1920x1080", "2560x1440", "3840x2160", "4096x2160"])
+        self.resolution_menu = ctk.CTkOptionMenu(self.options_frame, variable=self.resolution_var)
         self.resolution_menu.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
 
         # Quality
         self.quality_label = ctk.CTkLabel(self.options_frame, text="Quality:")
-        self.quality_label.grid(row=0, column=2, padx=10, pady=5, sticky="w")
+        self.quality_label.grid(row=2, column=0, padx=10, pady=5, sticky="w")
         self.quality_var = ctk.StringVar(value="high")
         self.quality_menu = ctk.CTkOptionMenu(self.options_frame, variable=self.quality_var,
                                                values=["fast", "standard", "high"])
-        self.quality_menu.grid(row=0, column=3, padx=10, pady=5, sticky="ew")
+        self.quality_menu.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
 
         # FPS
         self.fps_label = ctk.CTkLabel(self.options_frame, text="FPS:")
-        self.fps_label.grid(row=1, column=2, padx=10, pady=5, sticky="w")
+        self.fps_label.grid(row=3, column=0, padx=10, pady=5, sticky="w")
         self.fps_var = ctk.StringVar(value="60")
         self.fps_entry = ctk.CTkEntry(self.options_frame, textvariable=self.fps_var)
-        self.fps_entry.grid(row=1, column=3, padx=10, pady=5, sticky="ew")
+        self.fps_entry.grid(row=3, column=1, padx=10, pady=5, sticky="ew")
 
         self.drop_target = ctk.CTkLabel(self, text="", height=100, fg_color="gray20")
         self.drop_target.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
@@ -166,28 +180,65 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.resolution_label.configure(text=texts.get("resolution_label", "Resolution:"))
         self.quality_label.configure(text=texts.get("quality_label", "Quality:"))
         self.fps_label.configure(text=texts.get("fps_label", "FPS:"))
-        
-        self.codec_menu.configure(values=[
-            texts.get("codec_hevc", "H.265 (HEVC)"),
-            texts.get("codec_h264", "H.264 (AVC)"),
-            texts.get("codec_prores", "Apple ProRes")
-        ])
         self.quality_menu.configure(values=[
             texts.get("quality_fast", "Fast"),
             texts.get("quality_standard", "Standard"),
             texts.get("quality_high", "High")
         ])
-        # Keep track of original values
-        self.codec_map = {
-            texts.get("codec_hevc"): "hevc",
-            texts.get("codec_h264"): "h264",
-            texts.get("codec_prores"): "prores"
+        # --- Codec List ---
+        self.codec_display_map = {
+            'libx265': texts.get("codec_libx265"),
+            'libx264': texts.get("codec_libx264"),
+            'h264_nvenc': texts.get("codec_h264_nvenc"),
+            'h264_amf': texts.get("codec_h264_amf"),
+            'h264_qsv': texts.get("codec_h264_qsv"),
+            'h264_videotoolbox': texts.get("codec_h264_videotoolbox"),
+            'hevc_videotoolbox': texts.get("codec_hevc_videotoolbox"),
+            'libxvid': texts.get("codec_libxvid"),
+            'prores_ks': texts.get("codec_prores_ks"),
+            'libvpx': texts.get("codec_libvpx"),
+            'libvpx-vp9': texts.get("codec_libvpx-vp9"),
+            'libaom-av1': texts.get("codec_libaom-av1"),
+            'svt-av1': texts.get("codec_svt-av1"),
         }
+        
+        # Filter available codecs and populate menu
+        self.active_codec_map = {
+            desc: name for name, desc in self.codec_display_map.items() if name in self.available_encoders
+        }
+        
+        if not self.active_codec_map:
+            messagebox.showerror("Error", "No supported video encoders found in your ffmpeg build.")
+            self.codec_menu.configure(values=["No codecs found"], state="disabled")
+        else:
+            self.codec_menu.configure(values=list(self.active_codec_map.keys()))
+            
+            # Set default codec
+            default_codec_desc = None
+            if platform.system() == "Darwin" and self.codec_display_map['h264_videotoolbox'] in self.active_codec_map:
+                default_codec_desc = self.codec_display_map['h264_videotoolbox']
+            elif self.codec_display_map['libx264'] in self.active_codec_map:
+                default_codec_desc = self.codec_display_map['libx264']
+            else: # Fallback to first available
+                default_codec_desc = list(self.active_codec_map.keys())[0]
+            
+            self.codec_var.set(default_codec_desc)
+
         self.quality_map = {
             texts.get("quality_fast"): "fast",
             texts.get("quality_standard"): "standard",
             texts.get("quality_high"): "high"
         }
+        
+        self.resolution_display_map = {
+            texts.get("res_original"): "Original",
+            texts.get("res_fullhd"): "1920x1080",
+            texts.get("res_2k"): "2560x1440",
+            texts.get("res_4k_uhd"): "3840x2160",
+            texts.get("res_4k_dci"): "4096x2160",
+        }
+        self.resolution_menu.configure(values=list(self.resolution_display_map.keys()))
+        self.resolution_var.set(texts.get("res_4k_uhd"))
 
 
     def select_video(self):
@@ -365,9 +416,14 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         
         # --- Get UI settings ---
         selected_codec_display = self.codec_var.get()
-        codec_key = self.codec_map.get(selected_codec_display, "hevc")
+        video_codec = self.active_codec_map.get(selected_codec_display)
 
-        resolution = self.resolution_var.get()
+        if not video_codec:
+            self.after(0, self.on_render_error, "Selected codec is not available. Please restart the application.")
+            return None
+
+        resolution_display = self.resolution_var.get()
+        resolution = self.resolution_display_map.get(resolution_display, self.original_resolution)
         if resolution == "Original":
             resolution = self.original_resolution
         
@@ -381,18 +437,12 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         
         # --- Hardware Acceleration ---
         hwaccel_args = []
-        video_codec = 'libx264' # Default to CPU
+        video_codec_is_hw = any(c in video_codec for c in ['nvenc', 'amf', 'qsv', 'videotoolbox'])
         use_gpu = False
 
-        if system == "Darwin" and not force_cpu:
+        if system == "Darwin" and "videotoolbox" in video_codec and not force_cpu:
             command.extend(['-hwaccel', 'videotoolbox'])
             use_gpu = True
-            if codec_key == 'h264':
-                video_codec = 'h264_videotoolbox'
-            elif codec_key == 'hevc':
-                video_codec = 'hevc_videotoolbox'
-            elif codec_key == 'prores':
-                video_codec = 'prores_videotoolbox'
         # Add other OS hwaccel logic here if needed (e.g., NVENC, VAAPI)
         
         # --- Inputs ---
@@ -413,7 +463,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
         # Video processing (scaling and framerate)
         video_filters = []
-        if use_gpu:
+        if use_gpu and 'videotoolbox' in video_codec:
             # Use videotoolbox-native scaling for performance
             video_filters.append(f"scale_videotoolbox={resolution}")
         else:
@@ -424,7 +474,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         # Fading (CPU-based, so it requires download/upload if GPU is used)
         if fade_enabled:
             fade_duration = 1
-            if use_gpu:
+            if use_gpu and 'videotoolbox' in video_codec:
                 # This is a performance bottleneck, but necessary for the filter
                 video_filters.insert(0, "hwdownload,format=nv12")
                 video_filters.append(f"fade=t=in:st=0:d={fade_duration},fade=t=out:st={total_audio_duration - fade_duration}:d={fade_duration}")
@@ -446,13 +496,16 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         command.extend(['-pix_fmt', 'yuv420p']) # Good for compatibility
 
         if "videotoolbox" in video_codec:
-            # Profile for ProRes: 0=proxy, 1=lt, 2=standard, 3=hq
-            if codec_key == 'prores':
-                 command.extend(['-profile:v', '3' if quality == 'high' else '2'])
+            if 'prores' in video_codec:
+                 command.extend(['-profile:v', '3' if quality == 'high' else '2']) # Profile for ProRes: 0=proxy, 1=lt, 2=standard, 3=hq
             else: # H.264/HEVC bitrates
                 bitrates = {'fast': '25M', 'standard': '50M', 'high': '80M'} # Example for 4K
                 command.extend(['-b:v', bitrates.get(quality, '50M')])
-        else: # libx264 (CPU)
+        elif 'nvenc' in video_codec or 'amf' in video_codec:
+             command.extend(['-cq', '19' if quality == 'high' else '23'])
+        elif 'qsv' in video_codec:
+             command.extend(['-global_quality', '19' if quality == 'high' else '23'])
+        else: # libx264, libx265, libvpx etc.
             crf = {'fast': '28', 'standard': '23', 'high': '18'}
             preset = {'fast': 'ultrafast', 'standard': 'fast', 'high': 'medium'}
             command.extend(['-crf', crf.get(quality, '23')])
