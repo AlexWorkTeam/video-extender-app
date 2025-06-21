@@ -525,7 +525,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         
         # Add progress argument to ffmpeg command
         command.insert(1, "-progress")
-        command.insert(2, "pipe:2") # Redirect progress to stderr
+        command.insert(2, "pipe:1") # Redirect progress to stdout
 
         self.render_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, startupinfo=startupinfo, universal_newlines=True)
 
@@ -535,7 +535,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
                 break
 
             try:
-                line = self.render_process.stderr.readline()
+                line = self.render_process.stdout.readline()
                 if not line:
                     break
 
