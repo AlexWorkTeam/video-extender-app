@@ -468,16 +468,19 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         
         command.insert(1, "-progress")
-        command.insert(2, "pipe:1") # Redirect progress to stdout
+        command.insert(2, "pipe:2") # Redirect progress to stderr
 
-        self.render_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, startupinfo=startupinfo, universal_newlines=True)
+        if platform.system() == "Windows":
+            self.render_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, startupinfo=startupinfo, universal_newlines=True)
+        else:
+            self.render_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, startupinfo=startupinfo, universal_newlines=True)
 
     def monitor_progress(self, total_duration):
         while True:
             if self.render_process is None or self.render_process.poll() is not None:
                 break
             try:
-                line = self.render_process.stdout.readline()
+                line = self.render_process.stderr.readline()
                 if not line: break
                 if "out_time_ms" in line:
                     time_str = line.split("=")[1].strip()
